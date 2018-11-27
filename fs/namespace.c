@@ -1451,10 +1451,19 @@ static void umount_tree(struct mount *mnt, enum umount_tree_flags how)
 		pin_insert_group(&p->mnt_umount, &p->mnt_parent->mnt,
 				 disconnect ? &unmounted : NULL);
 		if (mnt_has_parent(p)) {
+			/*
+			 * handle tucked mounts that were not
+			 * dismantled through the progagation
+			 * path.
+			 */
+			if (!(how & UMOUNT_PROPAGATE))
+				prep_for_untuck(p);
+
 			mnt_add_count(p->mnt_parent, -1);
 			if (!disconnect) {
 				/* Don't forget about p */
-				list_add_tail(&p->mnt_child, &p->mnt_parent->mnt_mounts);
+				list_add_tail(&p->mnt_child,
+					&p->mnt_parent->mnt_mounts);
 			} else {
 				umount_mnt(p);
 			}
@@ -2003,8 +2012,10 @@ static int attach_recursive_mnt(struct mount *source_mnt,
 		hlist_del_init(&child->mnt_hash);
 		q = __lookup_mnt(&child->mnt_parent->mnt,
 				 child->mnt_mountpoint);
-		if (q)
+		if (q) {
+			prep_for_tuck(child);
 			mnt_change_mountpoint(child, smp, q);
+		}
 		commit_tree(child);
 	}
 	put_mountpoint(smp);
